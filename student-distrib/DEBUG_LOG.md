@@ -1,4 +1,27 @@
-# ECE391 MP3  DEBUG_LOG ------ GROUP 6
+# ECE391 MP3 DEBUG_LOG ------ GROUP 6
+
+
+                   _ooOoo_
+                  o8888888o
+                  88" . "88
+                  (| -_- |)
+                  O\  =  /O
+               ____/`---'\____
+             .'  \\|     |//  `.
+            /  \\|||  :  |||//  \
+           /  _||||| -:- |||||-  \
+           |   | \\\  -  /// |   |
+           | \_|  ''\---/''  |   |
+           \  .-\__  `-`  ___/-. /
+         ___`. .'  /--.--\  `. . __
+      ."" '<  `.___\_<|>_/___.'  >'"".
+     | | :  `- \`.;`\ _ /`;.`/ - ` : | |
+     \  \ `-.   \_ __\ /__ _/   .-` /  /
+      `-.____`-.___\_____/___.-`____.-'
+                   '=---='
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          Buddha Bless   No BUG
+
 
 ## 1. Group Info
 ### Group Name : Segmentation Correct
@@ -61,4 +84,46 @@
     - **Problem**: The keyboard.c has format error in "if-else" sentence
     - **Solution**: change the format of if-else sentence
     - **TimeTaking**: 5 min to find, 10 min to fix
-    
+
+## 3. Checkpoint 2
+### 3.1 Content of Checkpoint 2
+1. keyboard.c/h (modified) ----------------------> Adding New scan table and command
+2. lib.c/lib.h (modified) ----------------------> adding cursor control and screen modify
+3. terminal.c/h (added) -----------------> for terminal initialization
+4. test.c/tests.h (modified) ----------------> Test cases for checkpoint 2
+5. filesystem.c/h (added) ------------------> file system driver
+6. rtc.c/h (modified) --------------------> rtc can support many frequency
+
+### 3.2. Bug & Debug
+#### EXECUTION ERROR
+1. Paging Fault Exception:
+    - **Problem**: When test the terminal, throw a page fault exception, that's because the terminal is not locally created but only declarate a pointer
+    - **Solution**: define a new terminal type struct rather than only declarate a pointer
+    - **TimeTaking**: 10 min to find, 20 min to fix
+
+2. Paging Fault Exception (without initialized):
+    - **Problem**: The screen_x and screen_y was not initialize to 0 and it was not set to a correct value for the first time being used
+    - **Solution**: add an initialization function for screen_x, screen_y
+    - **TimeTaking**: 20 min to find, 10 min to fix    
+
+3. Cannot update the cursor when enter a linechange
+    - **Problem**: when add a new line in the terminal, the screen_y was not update by adding one
+    - **Solution**: Add one line: screen_y++; after add one line to the terminal
+    - **TimeTaking**: 10min to find, 5min to fix
+
+4. no uppercase letter nor special chars
+    - **Problem**: the scan table should be update to 2 kinds with condition logic
+    - **Solution**: modified the logic to adapt the 4kind of special key input
+    - **TimeTaking**: 10min to find, 30min to fix
+
+5. delete will make an space between cursor and last char
+    - **Problem**: the delete didn't move the screen_x left after put a ' '
+    - **Solution**: modified the logic of write buffer by minus screen_x when input is for delete
+    - **TimeTaking**: 10min to find, 5min to fix
+
+6. cannot read the filename to test buffer
+    - **Problem**: the data type are not consistent, one is int32_t while the other is int8_t, making only 0s appear in test buf.
+    - **Solution**: change the data type of test buffer to be int32_t
+    - **TimeTaking** 10min to find, 10min to fix
+
+
