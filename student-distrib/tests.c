@@ -3,11 +3,13 @@
 #include "lib.h"
 #include "i8259.h"
 #include "page.h"
+#include "terminal.h"
 #include "rtc.h"
 #include "filesystem.h"
 
 #define PASS 1
 #define FAIL 0
+#define buffer_size 128
 
 /* format these macros as you see fit */
 #define TEST_HEADER 	\
@@ -144,6 +146,57 @@ int paging_test(int test_mode){
 // add more tests here
 
 /* Checkpoint 2 tests */
+// test cases for terminal
+// input: None
+// output: PASS/FAIL
+// side effect: print out the result of the test
+// pass if the terminal can read and write correctly and return the correct number of bytes
+int test_terminal_rw(void){
+	TEST_HEADER;
+	int32_t i;
+	uint8_t test_buf[128];
+	int32_t test_read;
+	int32_t test_write;
+	int sign = 1;
+	printf("---------------Test for read and write----------------\n");
+	while(sign){
+		printf("Please enter a string: ");
+		test_read = test_read_term(0, test_buf, buffer_size);
+		printf("Output should be the same: ");
+		test_write = test_write_term(0, test_buf, buffer_size);
+		printf("test_read number: %d\n", test_read);
+		printf("test_write number: %d\n", test_write);
+		printf("test_buffer content: \n");
+		for(i = 0; i < test_read; i++){
+			printf("%c", test_buf[i]);
+		}
+		printf("\n");
+		if (test_read != test_write) printf("Test failed.\n");
+		else printf("This message appears if test successfully. \n");
+		printf("Enter 0 to exit for next test, else to continue: ");
+		test_read = test_read_term(0, test_buf, buffer_size);
+		sign = test_buf[0] - '0';
+	}
+	printf("----------------Test for read and write end----------------\n");
+	// next test for buffer newline
+	// test for newline
+	printf("\n");
+	printf("------------------Test for newline-----------------\n");
+	printf("It should print out 128 1s with new line changed: \n");
+	for(i = 0; i < 128; i++){
+		test_buf[i] = '1';
+	}
+	init_term();
+	i = test_write_term(0, test_buf, buffer_size); // should print out 128 1s with new line changed
+	printf("\n");
+	i++; // to because test_write is used for keyboard and it accepts one enter, so minus 1 occur in function
+		 // and we have to add 1 back here
+	if(i == 128) printf("Test successfully.\n");
+	else printf("Fail with printing %d\n", i);
+	printf("----------------Test for newline end----------------\n");
+	return PASS;
+}
+
 // test cases for rtc valid write
 // input: none
 // output: PASS/FAIL
@@ -152,6 +205,8 @@ int rtc_driver_valid_freqencies(){
 	TEST_HEADER;
 	uint32_t freqency;
 	int i;
+	printf("----------------Test for rtc valid write----------------------------------\n");
+	printf("It should print out numbers from 2 to 1024 at the freqency of the number\n\n");
 	for(freqency=2;freqency<=1024;freqency=freqency<<1){
 		if(rtc_write(0,&freqency,4)==-1){		//can not write a valid frequency
 			return FAIL;	
@@ -160,7 +215,10 @@ int rtc_driver_valid_freqencies(){
 			rtc_read(0,NULL,0);
 			printf("%u",freqency);
 		}
+		printf("\n");
 	}
+	printf("Test successfully.\n");
+	printf("----------------Test for rtc valid write end-----------------------------\n\n");
 	return PASS;
 }
 // test cases for rtc invalid write
@@ -169,155 +227,90 @@ int rtc_driver_valid_freqencies(){
 // side effect: none
 int rtc_driver_test_invalid_frequencies(){
 	TEST_HEADER;
+	printf("----------------Test for rtc invalid write---------------------------------\n");
 	int result = PASS;
 	uint32_t freqency = 555;	//not a power of 2
 	uint16_t freqency1 = 2048;	// a power of 2 but exceed 1024
 	if(rtc_write(0,&freqency,4)!=-1 || rtc_write(0,&freqency1,4)!=-1){
 		result = FAIL;
 	}
+	printf("----------------Test for rtc invalid write end--------------------------------\n\n");
 	return result;
 }
 
-/* Read by name test
- * 
- * Asserts that we can read dentry by name
- * Inputs: None
- * Outputs: PASS/FAIL
- * Side Effects: None
- */
-int read_by_name_test(uint8_t* filename) {
+// test cases for file system
+// input: filename
+// output: PASS/FAIL
+// side effect: none
+int test_file_ocrw(uint8_t* filename){
 	TEST_HEADER;
-	dentry_t test;
-	printf("READ FILE TEST");
-	printf(" \n");
-	if (read_dentry_by_name(filename, &test) == -1)
-		return FAIL;
-	printf("The file's name is %s!\n",test.filename);
-
-	if(strncmp((int8_t*)test.filename,(int8_t*)filename,FILENAME_LENGTH)!=0)
-		return FAIL;
-	return PASS;
-}
-
-/* Access data by name test
- * 
- * Asserts that we can read data from data block
- * Inputs: None
- * Outputs: PASS/FAIL
- * Side Effects: None
- */
-int read_data_test(uint8_t* filename) {
-	// TEST_HEADER;
-	dentry_t test;
-	char buff[40000] = {'\0'};
-	int i;
-	int32_t bytes_read;
-	read_dentry_by_name(filename,&test);
-	bytes_read = read_data(test.inode_index,0,(uint8_t*)buff,100000);
-	for(i=0; i <bytes_read; i++)
-		putc(buff[i]);
-	return PASS;
-}
-
-
-
-/* Read directory test
- * 
- * Asserts that we can read directory
- * Inputs: None
- * Outputs: PASS/FAIL
- * Side Effects: None
- * Coverage: Read directory
- */
-int read_directory_test(){
-	TEST_HEADER;
-	int32_t fd=0;
-	int i;
-	uint8_t buf[4096];
-	buf[32] = '\0';
-	// 63 is the max directory number in filesystem
-	for (i = 0; i < 63; i++){
-		if (dir_read(fd, buf, i) == -1)
-			break;
-		printf((int8_t*)buf);
-		printf("\n");
+	// first test for open file
+	int32_t counter;
+	int32_t bytelen;
+	uint8_t buffer[10000]; // get a large buffer to test
+	dentry_t test_dentry;
+	printf("------------------------Test for open file---------------------------------\n");
+	if(file_open(filename) == -1){
+		printf("Fail to open file.\n");
 	}
-	return PASS;
-}
-
-/*
-* File Open test
-* Asserts we can open the file
-* Inputs: None
-* Outputs: PASS/FAIL
-* Side Effects: None
-* Coverage: Open the file
-*/
-int open_file_test(uint8_t* filename){
-	TEST_HEADER;
-	int32_t i;
-	if (file_open(filename) == 0){
-		printf("Valid Filename: ");
-		for(i = 0; i<strlen((int8_t*)filename); i++){
-			putc(filename[i]);
-		}
-		printf("\n");
-		return PASS;
+	else{
+		printf("Open file successfully.\n");
 	}
-	printf("Invalid Filename: ");
-	for(i = 0; i<strlen((int8_t*)filename); i++){
-		putc(filename[i]);
+	printf("------------------------Test for open file end-----------------------------\n");
+	//sleep(1);
+	// next test for close file
+	printf("------------------------Test for close file--------------------------------\n");
+	if(file_close(0) == -1){
+		printf("Fail to close file.\n");
+	}
+	else{
+		printf("Close file successfully.\n");
+	}
+	printf("------------------------Test for close file end----------------------------\n");
+	//sleep(1);
+	// next test for read file
+	printf("------------------------Test for read file---------------------------------\n");
+	if(file_read(0, NULL, 0) == -1){
+		printf("Fail to read file.\n");
+	}
+	else{
+		printf("Read file successfully.\n");
+	}
+	printf("------------------------Test for read file end-----------------------------\n");
+	//sleep(1);
+	// next test for write file
+	printf("------------------------Test for write file--------------------------------\n");
+	if(file_write(0, NULL, 0) == -1){
+		printf("Fail to write file.\n");
+	}
+	else{
+		printf("Write file successfully.\n");
+	}
+	printf("------------------------Test for write file end----------------------------\n");
+	//sleep(1);
+	// next for listing filenames
+	printf("------------------------Test for listing filenames--------------------------\n");
+	//buffer[32] = '\0'; // set the last byte to be null, the filename is longest 32 bytes long
+	printf("Files in this dir: \n");
+	list_all_dir_ent();
+	printf("\n");
+	printf("------------------------Test for listing filenames end----------------------\n");
+	//sleep(1);
+
+	// next for read file counter by name
+	printf("------------------------Test for read file counter by name------------------\n");
+	read_dentry_by_name(filename, &test_dentry);
+	bytelen = read_data(test_dentry.inode_index, 0, buffer, 20000); // read from text
+	for(counter = 0; counter < bytelen; counter++){
+		putc(buffer[counter]);
 	}
 	printf("\n");
+	printf("------------------------Test for read file counter by name end--------------\n");
 	return PASS;
 }
 
-/*
-* File Close test
-* Asserts we can close the file
-* Inputs: None
-* Outputs: PASS/FAIL
-* Side Effects: None
-* Coverage: Close the file
-*/
-int close_file_test(){
-	TEST_HEADER;
-	int fd = 0;
-	if (file_close(fd) == 0)
-		return PASS;
-	return FAIL;
-}
 
-/*
-* File Write test
-* Asserts we can write the file
-* Inputs: None
-* Outputs: PASS/FAIL
-* Side Effects: None
-* Coverage: Write the file
-*/
-int write_file_test(){
-	TEST_HEADER;
-	if (file_write(0, NULL, 0) == 0)
-		return PASS;
-	return FAIL;
-}
 
-/*
-* File Read test
-* Asserts we can read the file
-* Inputs: None
-* Outputs: PASS/FAIL
-* Side Effects: None
-* Coverage: Read the file
-*/
-
-int read_file_test(){
-	TEST_HEADER;
-	if (file_read(0, NULL, 0) == 0)
-		return PASS;
-	return FAIL;
-}
 
 /* Checkpoint 3 tests */
 /* Checkpoint 4 tests */
@@ -326,6 +319,7 @@ int read_file_test(){
 
 /* Test suite entry point */
 void launch_tests(){
+	/* Checkpoint 1 tests */
 	//TEST_OUTPUT("idt_test", idt_test());
 	// launch your tests here
 	//TEST_OUTPUT("divide_zero exception", handler_DE_test());
@@ -337,14 +331,16 @@ void launch_tests(){
 	//TEST_OUTPUT("paging_test_right_boundary_of_video", paging_test(4));
 	//TEST_OUTPUT("paging_test_left_boundary_of_kernel", paging_test(5));
 	//TEST_OUTPUT("paging_test_right_boundary_of_kernel", paging_test(6));
-	//checkpoint 2
-	//TEST_OUTPUT("test valid rtc input",rtc_driver_valid_freqencies());
-	//TEST_OUTPUT("test invalid rtc input",rtc_driver_test_invalid_frequencies());
-	// TEST_OUTPUT("open_file_test_invalid", open_file_test((uint8_t*)"nonexistant_filename"));
-	// TEST_OUTPUT("open_file_test_valid", open_file_test((uint8_t*)"frame1.txt"));
-	// TEST_OUTPUT("read_file_test", read_file_test());
-	// TEST_OUTPUT("write_file_test", write_file_test());
-	// TEST_OUTPUT("read_file_name_test", read_by_name_test((uint8_t*)"pingpong"));
-	TEST_OUTPUT("read_data_test", read_data_test((uint8_t*)"frame1.txt"));
+
+	/* Checkpoint 2 tests */
+	// TEST_OUTPUT("test valid rtc input",rtc_driver_valid_freqencies());
+	//sleep(2);
+	// TEST_OUTPUT("test invalid rtc input",rtc_driver_test_invalid_frequencies());
+	//sleep(2);
+	// TEST_OUTPUT("terminal_rw_test", test_terminal_rw());
+	//sleep(2);
+	// TEST_OUTPUT("test_file_ocrw", test_file_ocrw((uint8_t*)"frame0.txt")); // text file
+	// TEST_OUTPUT("test_file_ocrw", test_file_ocrw((uint8_t*)"verylargetextwithverylongname.txt")); // very large file
+	TEST_OUTPUT("test_file_ocrw", test_file_ocrw((uint8_t*)"grep")); // excutable file
 }
 
